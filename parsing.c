@@ -51,6 +51,7 @@ void pval_print(pval* v) {
     case PVAL_ERR:   printf("Error: %s", v->err); break;
     case PVAL_SYM:   printf("%s", v->sym); break;
     case PVAL_SEXPR: pval_expr_print(v, '(', ')'); break;
+    case PVAL_QEXPR: pval_expr_print(v, '{', '}'); break;
   }
 }
 
@@ -94,6 +95,15 @@ pval* pval_sexpr(void)
 {
     pval* v = malloc(sizeof(pval));
     v->type = PVAL_SEXPR;
+    v->count = 0;
+    v->cell = NULL;
+    return v;
+}
+
+pval* pval_qexpr(void)
+{
+    pval* v = malloc(sizeof(pval));
+    v->type = PVAL_QEXPR;
     v->count = 0;
     v->cell = NULL;
     return v;
@@ -144,11 +154,14 @@ pval* pval_read(mpc_ast_t* t)
     pval* x = NULL;
     if (strcmp(t->tag, ">") == 0) {x = pval_sexpr();}
     if (strstr(t->tag, "sexpr")) {x = pval_sexpr();}
+    if (strstr(t->tag, "qexpr")) {x = pval_qexpr();}
 
     for (int i = 0; i < t->children_num; i++)
     {
         if (strcmp(t->children[i]->contents, "(") == 0) {continue;}
         if (strcmp(t->children[i]->contents, ")") == 0) {continue;}
+        if (strcmp(t->children[i]->contents, "{") == 0) {continue;}
+        if (strcmp(t->children[i]->contents, "}") == 0) {continue;}
         if (strcmp(t->children[i]->tag, "regex") == 0) {continue;}
         x = pval_add(x, pval_read(t->children[i]));
     }
@@ -165,6 +178,7 @@ void pval_del(pval* v)
         break;
     case PVAL_SYM: free(v->sym); 
         break;
+    case PVAL_QEXPR:
     case PVAL_SEXPR:
         for (int i = 0; i < v->count; i++){
             free(v->cell[i]);
@@ -262,6 +276,36 @@ pval* builtin_op(pval* a, char* op)
     return x;
 }
 
+pval* builtin_head(pval* a)
+{
+    if (a->count != 1)
+    {
+        pval_del(a);
+        return pval_err("Function 'head' passed to many arguments.");
+    }
+
+    if (a->cell[0]->type != PVAL_QEXPR)
+    {
+        pval_del(a);
+        return pval_err("Function 'head' passed incorrect types!");
+    }
+
+    if (a->cell[0]->count == 0)
+    {
+        pval_del(a);
+        return pval_err("Function 'head' passed.");
+    }
+
+    pval* v = pval_take(a,0);
+    while(v->count > 1) { pval_del(pval_pop(v, 1));}
+    return v;
+}
+
+pval* builtin_tail(pval* v)
+{
+    
+}
+
 pval* pval_eval(pval* v)
 {
     if (v->type == PVAL_SEXPR) { return pval_eval_sexpr(v); }
@@ -357,13 +401,13 @@ int main(int argc, char const *argv[])
         "                                                                                                                                \
         int   : /-?[0-9]+/ ;                                                                                                             \
         decimal  : /-?[0-9]+\\.[0-9]+/ ;                                                                                                 \
-        symbol : '+' | '-' | '*' | '/' | '%';                       \
+        symbol : \"list\" | \"head\" | \"tail\" | \"join\" | \"eval\" | '+' | '-' | '*' | '/' | '%';                       \
         sexpr    : '(' <expr>* ')';                                                                                                      \
         qexpr    : '{' <expr>* '}';                                                                                                      \
         expr     : <decimal> | <int> | <symbol> | <sexpr> | <qexpr>;                                                                                \
         pied    : /^/ <expr>* /$/ ;        \
         ",
-    Int, Decimal, Symbol, Sexpr, Expr, Pied);
+    Int, Decimal, Symbol, Sexpr, Qexpr, Expr, Pied);
 
     while (1)
     {
