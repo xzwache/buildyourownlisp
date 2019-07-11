@@ -44,6 +44,8 @@ pval* pval_take(pval* v, int i);
 pval* pval_pop (pval* v, int i);
 pval* builtin_op(pval* v, char* op);
 
+#define PASSERT(args, cond, err) if (!(cond)) {pval_del(args); return pval_err(err);}
+
 void pval_print(pval* v) {
   switch (v->type) {
     case PVAL_NUM:   printf("%li", v->num); break;
@@ -278,32 +280,24 @@ pval* builtin_op(pval* a, char* op)
 
 pval* builtin_head(pval* a)
 {
-    if (a->count != 1)
-    {
-        pval_del(a);
-        return pval_err("Function 'head' passed to many arguments.");
-    }
-
-    if (a->cell[0]->type != PVAL_QEXPR)
-    {
-        pval_del(a);
-        return pval_err("Function 'head' passed incorrect types!");
-    }
-
-    if (a->cell[0]->count == 0)
-    {
-        pval_del(a);
-        return pval_err("Function 'head' passed.");
-    }
+    PASSERT(a, a->count == 1, "Function 'head' passed too many arguments!");
+    PASSERT(a, a->cell[0]->type == PVAL_QEXPR, "Function 'head' passed incorrect type!");
+    PASSERT(a, a->cell[0]->count != 0, "Function 'head' passed {}!");
 
     pval* v = pval_take(a,0);
     while(v->count > 1) { pval_del(pval_pop(v, 1));}
     return v;
 }
 
-pval* builtin_tail(pval* v)
+pval* builtin_tail(pval* a)
 {
-    
+    PASSERT(a, a->count == 1, "Function 'tail' passed too many arguments!");
+    PASSERT(a, a->cell[0]->type == PVAL_QEXPR, "Function 'tail' passed incorrect type!");
+    PASSERT(a, a->cell[0]->count != 0, "Function 'tail' passed {}!");
+
+    pval* v = pval_take(a,0);
+    pval_del(pval_pop(v, 0));
+    return v;
 }
 
 pval* pval_eval(pval* v)
@@ -371,7 +365,7 @@ pval* pval_take(pval* v, int i) {
 
 int main(int argc, char const *argv[])
 {
-    puts("Pied 0.0.1");
+    puts("Pied 0.1.2");
 
    //mpc_parser_t* Value = mpc_new("value");
     mpc_parser_t* Int = mpc_new("int");
